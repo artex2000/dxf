@@ -36,7 +36,8 @@ static void d_button_clicked (GObject *button, GtkWidget *canvas)
 static void file_select (GtkFileChooser *cr, GtkLabel *label)
 {
 	gchar *file = gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (cr));
-	dxf_parcer (file);
+	if (file != NULL)
+		dxf_parser (file);
 }
 
 int main(int argc, char *argv[]) 
