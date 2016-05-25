@@ -1,7 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "list.h"
 #include "dxf.h"
+
+list_item contour;
 
 typedef enum {
 	Main,
@@ -34,19 +37,6 @@ static int block_control (int act, char *str);
 static int arc_control (int act, char *str);
 static int line_control (int act, char *str);
 static int vertex_control (int act, char *str);
-
-static const char * const names[10] = {
-	"SECTION",
-	"ENDSEC",
-	"CLASS",
-	"TABLE",
-	"ENDTAB",
-	"BLOCK",
-	"ENDBLK",
-	"ARC",
-	"LINE",
-	"VERTEX"
-};
 
 static const char names0[] = "SECTION";
 static const char names1[] = "ENDSEC";
@@ -84,7 +74,7 @@ static state_action_f action_curr = main_control;
 static state_t get_state (char *name)
 {
 	int i;
-	for (i = 0; states[i].state != MaxState; i++) {
+	for (i = 1; states[i].state != MaxState; i++) {
 		if (!strcmp (name, states[i].state_name))
 			return states[i].state;
 	}
@@ -104,17 +94,32 @@ static void state_push (state_t state)
 }
 static state_t state_pop (void)
 {
-	return state_stack[state_stack_idx--];
+	return state_stack[--state_stack_idx];
 }
 
-
-void print_contr (void)
+void print_contour (void)
 {
-	int i;
-	for (i = 0; states[i].state != MaxState; i++)
-		printf ("%s: %d -- %lx\n", states[i].state_name,
-				states[i].state, states[i].action);
+	list_item *i;
+	arc_t *arc;
+	line_t *line;
+
+	i = get_first_node (&contour);
+	while (!is_end_list (&contour, i)) {
+		line = (line_t *)i->data;
+		if (line->type == 0)
+			printf ("line %f:%f:%f - %f:%f:%f\n", 
+					line->a.x, line->a.y, line->a.z,
+					line->b.x, line->b.y, line->b.z);
+		else {
+			arc = (arc_t *)i->data;
+			printf ("arc %f:%f:%f - %f - %f:%f\n",
+					arc->c.x, arc->c.y, arc->c.z,
+					arc->r, arc->a1, arc->a2);
+		}
+		i = i->next;
+	}
 }
+		
 
 void dxf_parser (char *fname)
 {
@@ -122,14 +127,12 @@ void dxf_parser (char *fname)
 	int r, n;
 	char s[256];
 
-	print_contr();
-
 	fp = fopen (fname, "r");
 	if (fp == NULL) {
 		perror ("open file");
-//		exit (1);
 		return;
 	}
+	init_list (&contour);
 	do {
 		r = fscanf (fp, "%d\n", &n);
 		if (r != EOF) {
@@ -146,6 +149,7 @@ void dxf_parser (char *fname)
 			}
 		}
 	} while (r != EOF);
+	print_contour ();
 	fclose (fp);
 }
 
@@ -159,7 +163,6 @@ static int main_control (int act, char *str)
 			state_push (state_curr);
 			state_curr = st;
 			action_curr = get_action (st);
-			printf ("switch to %d -- %lx\n", state_curr, action_curr);
 			break;
 		default:
 			break;
@@ -188,13 +191,11 @@ static int section_control (int act, char *str)
 			state_push (state_curr);
 			state_curr = st;
 			action_curr = get_action (st);
-			printf ("switch to %d -- %lx\n", state_curr, action_curr);
 			break;
 		case EndSec:
 			name++;
 			state_curr = state_pop ();
 			action_curr = get_action (state_curr);
-			printf ("switch to %d -- %lx\n", state_curr, action_curr);
 			break;
 		default:
 			break;
@@ -257,20 +258,100 @@ static int block_control (int act, char *str)
 
 static int arc_control (int act, char *str)
 {
+	static int busy = 0;
+	static list_item *item;
+	static arc_t *arc;
+
+	if (!busy) {
+		item = malloc (sizeof (*item));
+		arc = malloc (sizeof (*arc));
+		if (arc == NULL || item == NULL) {
+			printf ("Not enough memory to complete operation\n");
+			exit (1);
+		}
+		arc->type = 1;
+		busy++;
+	}
+
 	if (act == 0) {
 		printf ("add arc\n");
+		item->data = arc;
+		insert_tail (&contour, item);
+		busy--;
 		return 1;
 	} else {
+		switch (act) {
+			case 10:
+				arc->c.x = atof (str);
+				break;
+			case 20:
+				arc->c.y = atof (str);
+				break;
+			case 30:
+				arc->c.z = atof (str);
+				break;
+			case 40:
+				arc->r = atof (str);
+				break;
+			case 50:
+				arc->a1 = atof (str);
+				break;
+			case 51:
+				arc->a2 = atof (str);
+				break;
+			default:
+				break;
+		}
 		return 0;
 	}
 }
 
 static int line_control (int act, char *str)
 {
+	static int busy = 0;
+	static list_item *item;
+	static line_t *line;
+
+	if (!busy) {
+		item = malloc (sizeof (*item));
+		line = malloc (sizeof (*line));
+		if (line == NULL || item == NULL) {
+			printf ("Not enough memory to complete operation\n");
+			exit (1);
+		}
+		line->type = 0;
+		busy++;
+	}
+
 	if (act == 0) {
 		printf ("add line\n");
+		item->data = line;
+		insert_tail (&contour, item);
+		busy--;
 		return 1;
 	} else {
+		switch (act) {
+			case 10:
+				line->a.x = atof (str);
+				break;
+			case 20:
+				line->a.y = atof (str);
+				break;
+			case 30:
+				line->a.z = atof (str);
+				break;
+			case 11:
+				line->b.x = atof (str);
+				break;
+			case 21:
+				line->b.y = atof (str);
+				break;
+			case 31:
+				line->b.z = atof (str);
+				break;
+			default:
+				break;
+		}
 		return 0;
 	}
 }

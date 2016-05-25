@@ -5,6 +5,7 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 
+#include "list.h"
 #include "dxf.h"
 
 static gboolean
