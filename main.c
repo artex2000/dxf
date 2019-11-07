@@ -1,12 +1,53 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include <cairo.h>
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 
 #include "list.h"
 #include "dxf.h"
+
+double d2r (double d)
+{
+    return d * M_PI / 180;
+}
+
+void draw_contour (cairo_t *cr)
+{
+	list_item *i;
+	arc_t *arc;
+	line_t *line;
+        double x, y;
+
+	i = get_first_node (&contour);
+        printf ("attempt to draw contour\n");
+	while (!is_end_list (&contour, i)) {
+		line = (line_t *)i->data;
+		if (line->type == 0) {
+                    cairo_move_to (cr, line->a.x, line->a.y);
+                    cairo_line_to (cr, line->b.x, line->b.y);
+                } else {
+			arc = (arc_t *)i->data;
+                            x = arc->c.x + arc->r * cos (d2r (arc->a1));
+                            y = arc->c.y + arc->r * sin (d2r (arc->a1));
+                            cairo_move_to (cr, x, y);
+                            if (arc->a1 > arc->a2)
+                                arc->a2 += 360;
+                                cairo_arc (cr, arc->c.x, arc->c.y,
+                                            arc->r,
+                                            d2r (arc->a1), d2r (arc->a2));
+                            //else
+                            /*
+                                cairo_arc_negative (cr, arc->c.x, arc->c.y,
+                                            arc->r,
+                                            d2r (arc->a1), d2r (arc->a2));
+                                            */
+		}
+		i = i->next;
+	}
+}
 
 static gboolean
 expose_event (GtkWidget *widget, GdkEventExpose *event) 
@@ -20,6 +61,8 @@ expose_event (GtkWidget *widget, GdkEventExpose *event)
 	cairo_set_line_width (cr, 0.5);
 	cw = (double)widget->allocation.width;
 	ch = (double)widget->allocation.height;
+        if (ready)
+            draw_contour (cr);
 	cairo_stroke (cr);
 	cairo_destroy (cr);
 	return TRUE;

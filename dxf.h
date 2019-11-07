@@ -22,6 +22,7 @@ typedef struct {
 } arc_t;
 
 extern list_item contour;
+extern int ready;
 
 void dxf_parser (char *fname);
 

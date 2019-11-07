@@ -6,6 +6,7 @@
 #include "dxf.h"
 
 list_item contour;
+int ready = 0;
 
 typedef enum {
 	Main,
@@ -151,6 +152,7 @@ void dxf_parser (char *fname)
 		}
 	} while (r != EOF);
 	print_contour ();
+        ready = 1;
 	fclose (fp);
 }
 
